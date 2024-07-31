@@ -14,7 +14,7 @@ class OKX {
             "App-Type": "web",
             "Content-Type": "application/json",
             "Origin": "https://www.okx.com",
-            "Referer": "https://www.okx.com/mini-app/racer?tgWebAppStartParam=linkCode_85298986",
+            "Referer": "https://www.okx.com/mini-app/racer?tgWebAppStartParam=linkCode_31347852",
             "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Microsoft Edge";v="126"',
             "Sec-Ch-Ua-Mobile": "?0",
             "Sec-Ch-Ua-Platform": '"Windows"',
@@ -52,7 +52,7 @@ class OKX {
             "extUserId": extUserId,
             "extUserName": extUserName,
             "gameId": 1,
-            "linkCode": "85298986"
+            "linkCode": "31347852"
         };
 
         const agent = new HttpsProxyAgent(proxy);
@@ -213,6 +213,21 @@ class OKX {
         }
     }
 
+    async getCurrentPrice(proxy) {
+        const url = 'https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT';
+        const agent = new HttpsProxyAgent(proxy);
+        try {
+            const response = await axios.get(url, { httpsAgent: agent });
+            if (response.data.code === '0' && response.data.data && response.data.data.length > 0) {
+                return parseFloat(response.data.data[0].last);
+            } else {
+                throw new Error('Lỗi khi lấy giá hiện tại');
+            }
+        } catch (error) {
+            throw new Error(`Lỗi lấy giá hiện tại: ${error.message}`);
+        }
+    }
+
     askQuestion(query) {
         const rl = readline.createInterface({
             input: process.stdin,
@@ -274,7 +289,7 @@ class OKX {
                                 continue;
                             }
                         } else {
-                            this.log('Không đủ điều kiện nâng cấp Fuel Tank!'.red);
+                            this.log('Không lấy được dữ liệu Fuel Tank!'.red);
                         }
                     }
                     if (turbo && hoiturbo) {
@@ -292,24 +307,37 @@ class OKX {
                                 continue;
                             }
                         } else {
-                            this.log('Không đủ điều kiện nâng cấp Turbo Charger!'.red);
+                            this.log('Không lấy được dữ liệu Turbo Charger!'.red);
                         }
                     }
                     
                     while (true) {
+                        const price1 = await this.getCurrentPrice(proxy);
+                        await this.sleep(4000);
+                        const price2 = await this.getCurrentPrice(proxy);
+
+                        let predict;
+                        let action;
+                        if (price1 > price2) {
+                            predict = 0; // Sell
+                            action = 'Bán';
+                        } else {
+                            predict = 1; // Buy
+                            action = 'Mua';
+                        }
                         const response = await this.postToOKXAPI(extUserId, extUserName, queryId, proxy);
                         const balancePoints = response.data.data.balancePoints;
                         this.log(`${'Balance Points:'.green} ${balancePoints}`);
     
-                        const predict = 1;
+
                         const assessResponse = await this.assessPrediction(extUserId, predict, queryId, proxy);
                         const assessData = assessResponse.data.data;
                         const result = assessData.won ? 'Win'.green : 'Thua'.red;
                         const calculatedValue = assessData.basePoint * assessData.multiplier;
-                        this.log(`Kết quả: ${result} x ${assessData.multiplier}! Balance: ${assessData.balancePoints}, Nhận được: ${calculatedValue}, Giá cũ: ${assessData.prevPrice}, Giá hiện tại: ${assessData.currentPrice}`.magenta);
-    
+                        this.log(`Dự Đoán ${action} | Kết quả: ${result} x ${assessData.multiplier}! Balance: ${assessData.balancePoints}, Nhận được: ${calculatedValue}, Giá cũ: ${assessData.prevPrice}, Giá hiện tại: ${assessData.currentPrice}`.magenta);
+
                         if (assessData.numChance > 0) {
-                            await this.Countdown(5);
+                            await this.Countdown(1);
                         } else if (assessData.numChance <= 0 && reloadFuelTank && reloadFuelTank.curStage < reloadFuelTank.totalStage) {
                             await this.useBoost(queryId, proxy);
     
